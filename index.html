@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Mini Tournament</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#2563eb;--blue-dk:#1d4ed8;--green:#16a34a;--green-dk:#15803d;
+  --red:#dc2626;--yellow-bg:#fef9c3;--yellow-txt:#854d0e;
+  --g50:#f8fafc;--g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;
+  --g400:#94a3b8;--g500:#64748b;--g700:#334155;--g900:#0f172a;
+  --radius:10px;--shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.08)
+}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--g50);color:var(--g900);
+  display:flex;flex-direction:column;
+  -webkit-tap-highlight-color:transparent
+}
+#app{flex:1;display:flex;flex-direction:column;min-height:0}
+button{cursor:pointer;border:none;font-family:inherit}
+input{font-family:inherit}
+
+/* ── HEADER ── */
+.hdr{
+  background:var(--blue);color:#fff;padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;box-shadow:var(--shadow)
+}
+.hdr h1{font-size:1.1rem;font-weight:700}
+.phase-badge{
+  font-size:.7rem;font-weight:600;padding:3px 8px;
+  border-radius:20px;background:rgba(255,255,255,.22);
+  letter-spacing:.05em;text-transform:uppercase
+}
+
+/* ── SETUP ── */
+.setup{padding:24px 16px;max-width:400px;margin:0 auto;width:100%}
+.setup h2{font-size:1.4rem;margin-bottom:6px}
+.setup p{color:var(--g500);margin-bottom:24px;font-size:.9rem}
+.fg{margin-bottom:20px}
+.fg label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
+.fg input[type=number]{
+  width:100%;padding:12px;border:2px solid var(--g200);
+  border-radius:var(--radius);font-size:1rem;outline:none;transition:border-color .15s
+}
+.fg input[type=number]:focus{border-color:var(--blue)}
+.hint{font-size:.8rem;color:var(--g400);margin-top:4px}
+
+/* ── BUTTONS ── */
+.btn-primary{
+  display:block;width:100%;padding:14px;border-radius:var(--radius);
+  font-size:1rem;font-weight:600;text-align:center;background:var(--blue);color:#fff;transition:background .15s
+}
+.btn-primary:active{background:var(--blue-dk)}
+.btn-success{
+  display:block;width:100%;padding:14px;border-radius:var(--radius);
+  font-size:1rem;font-weight:600;text-align:center;background:var(--green);color:#fff
+}
+.btn-success:active{background:var(--green-dk)}
+.btn-danger{
+  background:none;border:none;color:var(--red);
+  font-size:.85rem;padding:8px;display:block;margin:0 auto
+}
+
+/* ── SCROLL AREA ── */
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px}
+
+/* ── SECTION ── */
+.sec{margin:12px 12px 0}
+.sec-title{
+  font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--g500);margin-bottom:8px;padding:0 4px
+}
+
+/* ── STANDINGS ── */
+.tbl{
+  width:100%;border-collapse:collapse;background:#fff;
+  border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);font-size:.82rem
+}
+.tbl th{
+  background:var(--g100);padding:8px 5px;text-align:center;
+  font-weight:600;color:var(--g500);font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.04em
+}
+.tbl th:first-child{text-align:left;padding-left:10px}
+.tbl td{padding:10px 5px;text-align:center;border-top:1px solid var(--g100)}
+.tbl td:first-child{text-align:left;padding-left:10px}
+.tbl tr:first-child td{border-top:none}
+.rank{color:var(--g400);font-weight:500;margin-right:5px}
+.name-btn{
+  background:none;border:none;font-weight:600;font-size:.82rem;
+  color:var(--blue);padding:0;text-decoration:underline;
+  text-decoration-color:transparent;transition:text-decoration-color .15s
+}
+.name-btn:active{text-decoration-color:var(--blue)}
+.pts{font-weight:700}
+.adv-dot{color:var(--green);font-size:.65rem;margin-left:3px}
+
+/* ── GAMES LIST ── */
+.games-sec{margin:12px 12px 0}
+.round-lbl{
+  font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--g500);margin:16px 4px 8px;padding:0 4px
+}
+.game-card{
+  background:#fff;border-radius:var(--radius);margin-bottom:8px;
+  box-shadow:var(--shadow);overflow:hidden
+}
+.game-card.done{opacity:.6}
+.game-card.active-game{border-left:3px solid var(--blue)}
+.game-card.locked .game-btn{cursor:default;opacity:.4}
+.game-btn{
+  width:100%;background:none;border:none;
+  padding:13px 14px;display:flex;align-items:center;
+  justify-content:space-between;min-height:54px;transition:background .1s
+}
+.game-btn:active:not(:disabled){background:var(--g50)}
+.tl{flex:1;font-weight:600;font-size:.88rem}
+.tl.home{text-align:left}
+.tl.away{text-align:right}
+.sc{flex-shrink:0;text-align:center;min-width:58px;font-size:.95rem;font-weight:700}
+.sc.unplayed{color:var(--g300)}
+.gnum{
+  font-size:.68rem;color:var(--g400);
+  text-align:center;padding:0 0 5px
+}
+.bye-card{
+  background:var(--g100);border-radius:var(--radius);padding:13px 14px;
+  margin-bottom:8px;font-size:.85rem;color:var(--g500);font-style:italic
+}
+.cta-area{margin:16px 12px 0}
+.reset-area{margin:8px 12px 16px;text-align:center}
+
+/* ── SCORING VIEW ── */
+.scoring-outer{flex:1;display:flex;flex-direction:column;min-height:0}
+.sc-hdr{
+  background:#fff;padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--g200);flex-shrink:0
+}
+.back-btn{
+  background:none;color:var(--blue);font-size:1rem;font-weight:600;
+  padding:8px 0;min-width:44px;min-height:44px;
+  display:flex;align-items:center;gap:4px
+}
+.back-btn:disabled{opacity:.35;cursor:not-allowed}
+.game-lbl{font-size:.82rem;color:var(--g500);font-weight:500;text-align:center}
+.no-draw{
+  background:var(--yellow-bg);color:var(--yellow-txt);
+  text-align:center;font-size:.78rem;font-weight:600;
+  padding:6px;flex-shrink:0
+}
+.teams{display:flex;flex:1;min-height:0}
+.side{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.side.home{border-right:2px solid var(--g200)}
+.tm-name{
+  text-align:center;font-size:.8rem;font-weight:700;
+  padding:10px 8px 2px;color:var(--g700);
+  text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;line-height:1.2
+}
+.score-big{
+  text-align:center;font-size:4.5rem;font-weight:800;
+  color:var(--g900);line-height:1;padding:6px;flex-shrink:0
+}
+.inc-zone{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  background:var(--g50);cursor:pointer;user-select:none;-webkit-user-select:none;
+  transition:background .1s;border-top:1px solid var(--g100)
+}
+.inc-zone:active{background:var(--g200)}
+.inc-icon{font-size:2.5rem;color:var(--g300);transition:color .1s;font-weight:300;line-height:1}
+.inc-zone:active .inc-icon{color:var(--blue)}
+.dec-zone{
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  height:54px;background:#fff;border-top:1px solid var(--g200);
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .1s
+}
+.dec-zone:active{background:var(--g100)}
+.dec-lbl{font-size:1.6rem;font-weight:700;color:var(--red);line-height:1}
+
+/* ── MODAL ── */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;z-index:100;padding:16px
+}
+.modal{
+  background:#fff;border-radius:14px;padding:24px;
+  width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.3)
+}
+.modal h3{font-size:1.1rem;margin-bottom:8px}
+.modal p{font-size:.9rem;color:var(--g500);margin-bottom:16px}
+.modal-input{
+  width:100%;padding:12px;border:2px solid var(--g200);
+  border-radius:var(--radius);font-size:1rem;outline:none;margin-bottom:16px
+}
+.modal-input:focus{border-color:var(--blue)}
+.mactions{display:flex;flex-direction:column;gap:8px}
+.mactions button{
+  width:100%;padding:12px;border-radius:var(--radius);
+  font-weight:600;font-size:.95rem;border:none
+}
+.mb-primary{background:var(--blue);color:#fff}
+.mb-success{background:var(--green);color:#fff}
+.mb-danger{background:var(--red);color:#fff}
+.mb-cancel{background:var(--g100);color:var(--g700)}
+.seed-list{list-style:none;margin:10px 0}
+.seed-list li{
+  padding:6px 0;font-size:.88rem;
+  border-bottom:1px solid var(--g100);
+  display:flex;align-items:center;gap:8px
+}
+.seed-list li:last-child{border-bottom:none}
+.seed-num{
+  background:var(--blue);color:#fff;border-radius:50%;
+  width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:700;flex-shrink:0
+}
+.seed-num.bye{background:var(--g400)}
+.seed-num.sf{background:var(--green)}
+.divider{height:1px;background:var(--g200);margin:12px 0}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+
+const STORAGE_KEY = 'mini_tournament_v1';
+let state = loadState();
+let view = null; // 'setup' | 'main' | 'scoring'
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const p = JSON.parse(raw); if (p && p.phase) return p; }
+  } catch (_) {}
+  return { phase: 'setup' };
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULE GENERATION
+// ─────────────────────────────────────────────
+
+function rrRounds(ids) {
+  const arr = [...ids];
+  if (arr.length % 2 === 1) arr.push('__bye__');
+  const n = arr.length;
+  const rounds = [];
+  for (let r = 0; r < n - 1; r++) {
+    const round = [];
+    for (let i = 0; i < n / 2; i++) {
+      const a = arr[i], b = arr[n - 1 - i];
+      if (a !== '__bye__' && b !== '__bye__') round.push([a, b]);
+    }
+    rounds.push(round);
+    // rotate keeping arr[0] fixed
+    const last = arr.pop();
+    arr.splice(1, 0, last);
+  }
+  return rounds;
+}
+
+function orderGames(pairs) {
+  const rem = [...pairs];
+  const out = [];
+  let last = null;
+  while (rem.length) {
+    let best = -1, bestScore = Infinity;
+    for (let i = 0; i < rem.length; i++) {
+      const [h, a] = rem[i];
+      const c = last ? ((last.includes(h) ? 1 : 0) + (last.includes(a) ? 1 : 0)) : 0;
+      if (c < bestScore) { bestScore = c; best = i; if (c === 0) break; }
+    }
+    const chosen = rem.splice(best, 1)[0];
+    out.push(chosen);
+    last = chosen;
+  }
+  return out;
+}
+
+function generateSchedule(teams, mpp) {
+  const ids = teams.map(t => t.id);
+  const base = rrRounds(ids);
+  const raw = [];
+  for (let rep = 0; rep < mpp; rep++)
+    for (const rd of base)
+      for (const pair of rd) raw.push([...pair]);
+
+  const ordered = orderGames(raw);
+  const homeCnt = {};
+  ids.forEach(id => homeCnt[id] = 0);
+
+  return ordered.map((pair, i) => {
+    const [t1, t2] = pair;
+    let homeId, awayId;
+    if ((homeCnt[t1] || 0) <= (homeCnt[t2] || 0)) { homeId = t1; awayId = t2; }
+    else { homeId = t2; awayId = t1; }
+    homeCnt[homeId] = (homeCnt[homeId] || 0) + 1;
+    return { id: `g${i}`, homeId, awayId, homeScore: 0, awayScore: 0, completed: false };
+  });
+}
+
+// ─────────────────────────────────────────────
+// STANDINGS
+// ─────────────────────────────────────────────
+
+function teamName(id) {
+  const t = (state.teams || []).find(t => t.id === id);
+  return t ? t.name : id;
+}
+
+function h2hPts(id1, id2) {
+  let p1 = 0, p2 = 0;
+  for (const g of (state.poolGames || [])) {
+    if (!g.completed) continue;
+    if (g.homeId === id1 && g.awayId === id2) {
+      if (g.homeScore > g.awayScore) p1 += 3;
+      else if (g.homeScore < g.awayScore) p2 += 3;
+      else { p1++; p2++; }
+    } else if (g.homeId === id2 && g.awayId === id1) {
+      if (g.homeScore > g.awayScore) p2 += 3;
+      else if (g.homeScore < g.awayScore) p1 += 3;
+      else { p1++; p2++; }
+    }
+  }
+  return p1 - p2;
+}
+
+function standings() {
+  const s = {};
+  (state.teams || []).forEach(t => {
+    s[t.id] = { id: t.id, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+  });
+  for (const g of (state.poolGames || [])) {
+    if (!g.completed) continue;
+    const h = s[g.homeId], a = s[g.awayId];
+    if (!h || !a) continue;
+    h.mp++; a.mp++;
+    h.gf += g.homeScore; h.ga += g.awayScore;
+    a.gf += g.awayScore; a.ga += g.homeScore;
+    if (g.homeScore > g.awayScore)      { h.w++; h.pts += 3; a.l++; }
+    else if (g.homeScore < g.awayScore) { a.w++; a.pts += 3; h.l++; }
+    else                                { h.d++; h.pts++; a.d++; a.pts++; }
+  }
+  return Object.values(s).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    const hh = h2hPts(a.id, b.id);
+    if (hh !== 0) return -hh;
+    const agd = a.gf - a.ga, bgd = b.gf - b.ga;
+    if (bgd !== agd) return bgd - agd;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return teamName(a.id).localeCompare(teamName(b.id));
+  });
+}
+
+// ─────────────────────────────────────────────
+// BRACKET
+// ─────────────────────────────────────────────
+
+function makeBracket(seeded) {
+  const n = Math.min(4, seeded.length);
+  const games = [];
+  if (n >= 4) {
+    games.push(bg('semi1', 'semi', seeded[0].id, seeded[3].id));
+    games.push(bg('semi2', 'semi', seeded[1].id, seeded[2].id));
+    games.push(bg('final', 'final', null, null));
+  } else if (n === 3) {
+    games.push(bg('semi1', 'semi', seeded[1].id, seeded[2].id));
+    games.push(bg('final', 'final', seeded[0].id, null)); // seed 1 bye → home slot
+  } else {
+    games.push(bg('final', 'final', seeded[0]?.id || null, seeded[1]?.id || null));
+  }
+  return games;
+}
+
+function bg(id, round, homeId, awayId) {
+  return { id, round, homeId, awayId, homeScore: 0, awayScore: 0, completed: false, winnerId: null };
+}
+
+function advanceBracket() {
+  const gs = state.bracketGames || [];
+  const n = Math.min(4, (state.teams || []).length);
+  const semi1 = gs.find(g => g.id === 'semi1');
+  const semi2 = gs.find(g => g.id === 'semi2');
+  const final = gs.find(g => g.id === 'final');
+  if (!final) return;
+
+  if (n >= 4) {
+    if (semi1?.completed && semi1.winnerId) {
+      if (final.homeId !== semi1.winnerId) {
+        final.homeId = semi1.winnerId;
+        final.homeScore = 0; final.awayScore = 0;
+        final.completed = false; final.winnerId = null;
+      }
+    }
+    if (semi2?.completed && semi2.winnerId) {
+      if (final.awayId !== semi2.winnerId) {
+        final.awayId = semi2.winnerId;
+        final.homeScore = 0; final.awayScore = 0;
+        final.completed = false; final.winnerId = null;
+      }
+    }
+  } else if (n === 3) {
+    if (semi1?.completed && semi1.winnerId) {
+      if (final.awayId !== semi1.winnerId) {
+        final.awayId = semi1.winnerId;
+        final.homeScore = 0; final.awayScore = 0;
+        final.completed = false; final.winnerId = null;
+      }
+    }
+  }
+}
+
+function bracketUnlocked(game) {
+  if (game.round === 'semi') return true;
+  return game.homeId !== null && game.awayId !== null;
+}
+
+// ─────────────────────────────────────────────
+// ROUTING
+// ─────────────────────────────────────────────
+
+function go(v) { view = v; render(); }
+
+function openGame(gameId, gamePhase) {
+  state.activeGameId = gameId;
+  state.activeGamePhase = gamePhase;
+  save();
+  go('scoring');
+}
+
+function closeGame() {
+  state.activeGameId = null;
+  state.activeGamePhase = null;
+  save();
+  go('main');
+}
+
+// ─────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────
+
+const $app = document.getElementById('app');
+
+function render() {
+  if (state.phase === 'setup') { renderSetup(); return; }
+  if (view === 'scoring')      { renderScoring(); return; }
+  renderMain();
+}
+
+// ── Setup ──
+
+function renderSetup() {
+  $app.innerHTML = `
+    <div class="hdr"><h1>Mini Tournament</h1></div>
+    <div class="scroll-area">
+      <div class="setup">
+        <h2>New Tournament</h2>
+        <p>Pool play followed by single-elimination.</p>
+        <div class="fg">
+          <label for="tc">Number of Teams</label>
+          <input type="number" id="tc" min="3" max="8" value="6">
+          <div class="hint">3 – 8 teams</div>
+        </div>
+        <div class="fg">
+          <label for="mpp">Times Each Team Plays Each Other</label>
+          <input type="number" id="mpp" min="1" max="4" value="1">
+          <div class="hint">Usually 1 or 2</div>
+        </div>
+        <button class="btn-primary" onclick="startTournament()">Start Tournament</button>
+      </div>
+    </div>`;
+}
+
+function startTournament() {
+  const tc  = parseInt(document.getElementById('tc').value);
+  const mpp = parseInt(document.getElementById('mpp').value);
+  if (tc < 3 || tc > 8)    { alert('Please enter between 3 and 8 teams.'); return; }
+  if (mpp < 1 || mpp > 4)  { alert('Please enter between 1 and 4 matches per pairing.'); return; }
+  const teams = Array.from({ length: tc }, (_, i) => ({ id: `t${i+1}`, name: `Team ${i+1}` }));
+  state = {
+    phase: 'pool', teams, matchesPerPairing: mpp,
+    poolGames: generateSchedule(teams, mpp),
+    bracketGames: [], activeGameId: null, activeGamePhase: null
+  };
+  save();
+  go('main');
+}
+
+// ── Main ──
+
+function renderMain() {
+  const st = standings();
+  const allDone = state.phase === 'pool' && state.poolGames.length > 0 && state.poolGames.every(g => g.completed);
+  const phaseLabel = state.phase === 'pool' ? 'Pool Play' : 'Elimination';
+
+  let html = `
+    <div class="hdr">
+      <h1>Mini Tournament</h1>
+      <span class="phase-badge">${phaseLabel}</span>
+    </div>
+    <div class="scroll-area">
+      <div class="sec">
+        <div class="sec-title">Standings</div>
+        ${renderStandings(st)}
+      </div>
+      <div class="games-sec">`;
+
+  if (state.phase === 'pool') {
+    html += renderPoolGames();
+    if (allDone) {
+      html += `<div class="cta-area">
+        <button class="btn-success" onclick="promptElimination()">Start Elimination Round →</button>
+      </div>`;
+    }
+  } else {
+    html += renderBracketView();
+  }
+
+  html += `</div>
+      <div class="reset-area">
+        <button class="btn-danger" onclick="promptReset()">Reset Tournament</button>
+      </div>
+    </div>`;
+
+  $app.innerHTML = html;
+}
+
+function renderStandings(st) {
+  const advCount = Math.min(4, (state.teams || []).length);
+  const rows = st.map((s, i) => {
+    const gd = s.gf - s.ga;
+    const gdStr = gd > 0 ? `+${gd}` : `${gd}`;
+    const dot = (state.phase === 'pool' && i < advCount)
+      ? '<span class="adv-dot" title="Advances to elimination">●</span>' : '';
+    return `<tr>
+      <td>
+        <span class="rank">${i+1}</span>
+        <button class="name-btn" onclick="editName('${s.id}')">${esc(teamName(s.id))}</button>${dot}
+      </td>
+      <td>${s.mp}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td>
+      <td>${s.gf}</td><td>${s.ga}</td><td>${gdStr}</td>
+      <td class="pts">${s.pts}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="tbl">
+    <thead><tr>
+      <th>Team</th><th>MP</th><th>W</th><th>D</th><th>L</th>
+      <th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderPoolGames() {
+  if (!state.poolGames.length) return '';
+  const isElim = state.phase === 'elimination';
+  let html = `<div class="round-lbl">Games</div>`;
+  state.poolGames.forEach((g, i) => {
+    const isActive = state.activeGameId === g.id && state.activeGamePhase === 'pool';
+    const showScore = g.completed || g.homeScore > 0 || g.awayScore > 0 || isActive;
+    const scoreHtml = showScore
+      ? `<span class="sc">${g.homeScore} – ${g.awayScore}</span>`
+      : `<span class="sc unplayed">vs</span>`;
+    const doneClass = g.completed ? ' done' : '';
+    const activeClass = isActive ? ' active-game' : '';
+    const clickAttr = isElim ? 'disabled style="cursor:default"' : `onclick="openGame('${g.id}','pool')"`;
+    html += `<div class="game-card${doneClass}${activeClass}">
+      <button class="game-btn" ${clickAttr}>
+        <span class="tl home">${esc(teamName(g.homeId))}</span>
+        ${scoreHtml}
+        <span class="tl away">${esc(teamName(g.awayId))}</span>
+      </button>
+      <div class="gnum">Game ${i+1}</div>
+    </div>`;
+  });
+  return html;
+}
+
+function renderBracketView() {
+  const gs = state.bracketGames || [];
+  const semis = gs.filter(g => g.round === 'semi');
+  const final = gs.find(g => g.round === 'final');
+  let html = '';
+
+  if (semis.length) {
+    html += `<div class="round-lbl">Semifinals</div>`;
+    for (const g of semis) html += renderBracketGame(g);
+  }
+  if (final) {
+    html += `<div class="round-lbl">Final</div>`;
+    html += renderBracketGame(final);
+  }
+  return html;
+}
+
+function renderBracketGame(g) {
+  const unlocked = bracketUnlocked(g);
+  const isActive = state.activeGameId === g.id && state.activeGamePhase === 'bracket';
+  const showScore = g.completed || g.homeScore > 0 || g.awayScore > 0 || isActive;
+  const scoreHtml = showScore
+    ? `<span class="sc">${g.homeScore} – ${g.awayScore}</span>`
+    : `<span class="sc unplayed">vs</span>`;
+  const homeLbl = g.homeId ? esc(teamName(g.homeId)) : '<em style="color:var(--g400);font-weight:400">TBD</em>';
+  const awayLbl = g.awayId ? esc(teamName(g.awayId)) : '<em style="color:var(--g400);font-weight:400">TBD</em>';
+  const doneClass  = g.completed ? ' done' : '';
+  const activeClass = isActive ? ' active-game' : '';
+  const lockedClass = !unlocked ? ' locked' : '';
+  const clickAttr = unlocked
+    ? `onclick="openGame('${g.id}','bracket')"`
+    : 'disabled';
+  const winnerLine = g.winnerId
+    ? `<div class="gnum">🏆 ${esc(teamName(g.winnerId))}</div>` : '';
+
+  return `<div class="game-card${doneClass}${activeClass}${lockedClass}">
+    <button class="game-btn" ${clickAttr}>
+      <span class="tl home">${homeLbl}</span>
+      ${scoreHtml}
+      <span class="tl away">${awayLbl}</span>
+    </button>
+    ${winnerLine}
+  </div>`;
+}
+
+// ── Scoring ──
+
+function renderScoring() {
+  const gid = state.activeGameId;
+  const gph = state.activeGamePhase;
+  const game = (gph === 'pool' ? state.poolGames : state.bracketGames || []).find(g => g.id === gid);
+  if (!game) { closeGame(); return; }
+
+  const isBracket = gph === 'bracket';
+  const tied = game.homeScore === game.awayScore;
+  const doneDisabled = isBracket && tied;
+  const phaseLabel = isBracket
+    ? (game.round === 'final' ? 'Final' : 'Semifinal') : 'Pool Play';
+
+  $app.innerHTML = `
+    <div class="hdr">
+      <h1>${isBracket ? 'Elimination' : 'Pool Play'}</h1>
+      <span class="phase-badge">${phaseLabel}</span>
+    </div>
+    <div class="scoring-outer">
+      <div class="sc-hdr">
+        <button class="back-btn" onclick="handleDone()" ${doneDisabled ? 'disabled' : ''}>← Done</button>
+        <span class="game-lbl">${esc(teamName(game.homeId))} vs ${esc(teamName(game.awayId))}</span>
+        <div style="width:60px"></div>
+      </div>
+      ${isBracket ? `<div class="no-draw${tied ? '' : ' hidden'}" id="no-draw-banner">No draws in elimination — must have a winner</div>` : ''}
+      <div class="teams">
+        <div class="side home">
+          <div class="tm-name">${esc(teamName(game.homeId))}</div>
+          <div class="score-big" id="sc-home">${game.homeScore}</div>
+          <div class="inc-zone" ontouchstart="" onclick="adj('home',1)">
+            <span class="inc-icon">+</span>
+          </div>
+          <div class="dec-zone" ontouchstart="" onclick="adj('home',-1)">
+            <span class="dec-lbl">−</span>
+          </div>
+        </div>
+        <div class="side away">
+          <div class="tm-name">${esc(teamName(game.awayId))}</div>
+          <div class="score-big" id="sc-away">${game.awayScore}</div>
+          <div class="inc-zone" ontouchstart="" onclick="adj('away',1)">
+            <span class="inc-icon">+</span>
+          </div>
+          <div class="dec-zone" ontouchstart="" onclick="adj('away',-1)">
+            <span class="dec-lbl">−</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function adj(side, delta) {
+  const gph = state.activeGamePhase;
+  const games = gph === 'pool' ? state.poolGames : state.bracketGames;
+  const game = (games || []).find(g => g.id === state.activeGameId);
+  if (!game) return;
+
+  if (side === 'home') game.homeScore = Math.max(0, game.homeScore + delta);
+  else                 game.awayScore = Math.max(0, game.awayScore + delta);
+
+  if (gph === 'bracket') {
+    game.winnerId = game.homeScore !== game.awayScore
+      ? (game.homeScore > game.awayScore ? game.homeId : game.awayId) : null;
+  }
+
+  save();
+
+  const elH = document.getElementById('sc-home');
+  const elA = document.getElementById('sc-away');
+  if (elH) elH.textContent = game.homeScore;
+  if (elA) elA.textContent = game.awayScore;
+
+  if (gph === 'bracket') {
+    const tied = game.homeScore === game.awayScore;
+    const btn = document.querySelector('.back-btn');
+    const banner = document.getElementById('no-draw-banner');
+    if (btn) btn.disabled = tied;
+    if (banner) banner.classList.toggle('hidden', !tied);
+  }
+}
+
+function handleDone() {
+  const gph = state.activeGamePhase;
+  const games = gph === 'pool' ? state.poolGames : state.bracketGames;
+  const game = (games || []).find(g => g.id === state.activeGameId);
+  if (!game) { closeGame(); return; }
+  if (gph === 'bracket' && game.homeScore === game.awayScore) return;
+
+  game.completed = true;
+  if (gph === 'bracket') advanceBracket();
+  save();
+  closeGame();
+}
+
+// ─────────────────────────────────────────────
+// MODALS
+// ─────────────────────────────────────────────
+
+function showModal(inner) {
+  closeModal();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'modal';
+  el.innerHTML = inner;
+  el.addEventListener('click', e => { if (e.target === el) closeModal(); });
+  document.body.appendChild(el);
+}
+
+function closeModal() {
+  const el = document.getElementById('modal');
+  if (el) el.remove();
+}
+
+// Team name edit
+
+function editName(teamId) {
+  const team = (state.teams || []).find(t => t.id === teamId);
+  if (!team) return;
+  showModal(`<div class="modal">
+    <h3>Edit Team Name</h3>
+    <input class="modal-input" id="nm-input" type="text" value="${esc(team.name)}" maxlength="30">
+    <div class="mactions">
+      <button class="mb-primary" onclick="saveName('${teamId}')">Save</button>
+      <button class="mb-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>`);
+  setTimeout(() => { const el = document.getElementById('nm-input'); if (el) { el.focus(); el.select(); } }, 50);
+}
+
+function saveName(teamId) {
+  const val = (document.getElementById('nm-input')?.value || '').trim();
+  if (!val) { alert('Name cannot be empty.'); return; }
+  const team = (state.teams || []).find(t => t.id === teamId);
+  if (team) team.name = val;
+  save();
+  closeModal();
+  renderMain();
+}
+
+// Elimination confirm
+
+function promptElimination() {
+  const st = standings();
+  const seeded = st.slice(0, Math.min(4, (state.teams || []).length));
+  const n = seeded.length;
+
+  const seedRows = seeded.map((s, i) =>
+    `<li><span class="seed-num">${i+1}</span>${esc(teamName(s.id))} <small style="color:var(--g400)">${s.pts} pts</small></li>`
+  ).join('');
+
+  let matchupRows = '';
+  if (n >= 4) {
+    matchupRows = `
+      <li><span class="seed-num sf">SF</span>${esc(teamName(seeded[0].id))} vs ${esc(teamName(seeded[3].id))}</li>
+      <li><span class="seed-num sf">SF</span>${esc(teamName(seeded[1].id))} vs ${esc(teamName(seeded[2].id))}</li>`;
+  } else if (n === 3) {
+    matchupRows = `
+      <li><span class="seed-num bye">BYE</span>${esc(teamName(seeded[0].id))} — advances directly to final</li>
+      <li><span class="seed-num sf">SF</span>${esc(teamName(seeded[1].id))} vs ${esc(teamName(seeded[2].id))}</li>`;
+  } else {
+    matchupRows = seeded.map(s => `<li>${esc(teamName(s.id))}</li>`).join('');
+  }
+
+  showModal(`<div class="modal">
+    <h3>Start Elimination Round?</h3>
+    <p>Advancing teams (by pool standings):</p>
+    <ul class="seed-list">${seedRows}</ul>
+    <div class="divider"></div>
+    <p>Matchups:</p>
+    <ul class="seed-list">${matchupRows}</ul>
+    <div class="mactions" style="margin-top:20px">
+      <button class="mb-success" onclick="confirmElimination()">Confirm &amp; Start</button>
+      <button class="mb-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>`);
+}
+
+function confirmElimination() {
+  const st = standings();
+  state.phase = 'elimination';
+  state.bracketGames = makeBracket(st);
+  save();
+  closeModal();
+  go('main');
+}
+
+// Reset
+
+function promptReset() {
+  showModal(`<div class="modal">
+    <h3>Reset Tournament</h3>
+    <p>Choose how to reset:</p>
+    <div class="mactions">
+      <button class="mb-primary" onclick="doReset('keep')">Reset scores, keep teams &amp; names</button>
+      <button class="mb-danger" onclick="doReset('full')">Full reset — clear everything</button>
+      <button class="mb-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>`);
+}
+
+function doReset(type) {
+  if (type === 'keep') {
+    state = {
+      phase: 'pool', teams: state.teams,
+      matchesPerPairing: state.matchesPerPairing,
+      poolGames: generateSchedule(state.teams, state.matchesPerPairing),
+      bracketGames: [], activeGameId: null, activeGamePhase: null
+    };
+    save(); closeModal(); go('main');
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+    closeModal();
+    location.reload();
+  }
+}
+
+// ─────────────────────────────────────────────
+// UTILITY
+// ─────────────────────────────────────────────
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+
+(function init() {
+  if (state.phase === 'setup')    go('setup');
+  else if (state.activeGameId)    go('scoring');
+  else                            go('main');
+})();
+</script>
+</body>
+</html>

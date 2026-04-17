@@ -63,6 +63,12 @@ input{font-family:inherit}
   font-size:1rem;font-weight:600;text-align:center;background:var(--green);color:#fff
 }
 .btn-success:active{background:var(--green-dk)}
+.btn-warning{
+  display:block;width:100%;padding:14px;border-radius:var(--radius);
+  font-size:1rem;font-weight:600;text-align:center;
+  background:#d97706;color:#fff
+}
+.btn-warning:active{background:#b45309}
 .btn-danger{
   background:none;border:none;color:var(--red);
   font-size:.85rem;padding:8px;display:block;margin:0 auto
@@ -368,6 +374,20 @@ function standings() {
   });
 }
 
+function ppgStandings() {
+  return standings().sort((a, b) => {
+    const appg = a.mp > 0 ? a.pts / a.mp : 0;
+    const bppg = b.mp > 0 ? b.pts / b.mp : 0;
+    if (Math.abs(bppg - appg) > 0.0001) return bppg - appg;
+    const hh = h2hPts(a.id, b.id);
+    if (hh !== 0) return -hh;
+    const agd = a.gf - a.ga, bgd = b.gf - b.ga;
+    if (bgd !== agd) return bgd - agd;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return teamName(a.id).localeCompare(teamName(b.id));
+  });
+}
+
 // ─────────────────────────────────────────────
 // BRACKET
 // ─────────────────────────────────────────────
@@ -523,9 +543,14 @@ function renderMain() {
 
   if (state.phase === 'pool') {
     html += renderPoolGames();
+    const someDone = state.poolGames.some(g => g.completed);
     if (allDone) {
       html += `<div class="cta-area">
         <button class="btn-success" onclick="promptElimination()">Start Elimination Round →</button>
+      </div>`;
+    } else if (someDone) {
+      html += `<div class="cta-area">
+        <button class="btn-warning" onclick="promptEarlyEnd()">End Pool Play Early…</button>
       </div>`;
     }
   } else {
@@ -776,6 +801,38 @@ function saveName(teamId) {
   renderMain();
 }
 
+// Early end
+
+function promptEarlyEnd() {
+  const st = ppgStandings();
+  const seeded = st.slice(0, Math.min(4, (state.teams || []).length));
+  const total = (state.poolGames || []).length;
+  const played = (state.poolGames || []).filter(g => g.completed).length;
+
+  const seedRows = st.map((s, i) => {
+    const ppg = s.mp > 0 ? (s.pts / s.mp).toFixed(2) : '—';
+    const mpNote = s.mp === 0 ? ' <small style="color:var(--g400)">(no games played)</small>' : '';
+    const advancing = i < seeded.length
+      ? '<span style="color:var(--green);font-size:.72rem;margin-left:4px">advances</span>' : '';
+    return `<li>
+      <span class="seed-num">${i+1}</span>
+      ${esc(teamName(s.id))}${mpNote}
+      <span style="margin-left:auto;font-size:.8rem;color:var(--g500)">${s.pts} pts / ${s.mp} played = <strong>${ppg} PPG</strong></span>
+      ${advancing}
+    </li>`;
+  }).join('');
+
+  showModal(`<div class="modal">
+    <h3>End Pool Play Early?</h3>
+    <p>${played} of ${total} games played. Seedings will be based on <strong>Points Per Game (Pts ÷ MP)</strong> for fairness.</p>
+    <ul class="seed-list">${seedRows}</ul>
+    <div class="mactions" style="margin-top:20px">
+      <button class="mb-success" onclick="confirmElimination(true)">Advance to Elimination</button>
+      <button class="mb-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>`);
+}
+
 // Elimination confirm
 
 function promptElimination() {
@@ -814,8 +871,8 @@ function promptElimination() {
   </div>`);
 }
 
-function confirmElimination() {
-  const st = standings();
+function confirmElimination(earlyEnd) {
+  const st = earlyEnd ? ppgStandings() : standings();
   state.phase = 'elimination';
   state.bracketGames = makeBracket(st);
   save();

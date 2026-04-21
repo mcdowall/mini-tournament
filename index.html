@@ -60,7 +60,7 @@ input{font-family:inherit}
   font-size:.72rem;font-weight:700;text-transform:uppercase;
   letter-spacing:.08em;color:var(--g400)
 }
-.sc-divider::before,.sc-divider::after{content:'';flex:1;height:1px;background:var(--g200)}
+.sc-divider::before,.sc-divider::after{content:'';flex:1;height:1px;background:var(--g500)}
 
 /* ── BUTTONS ── */
 .btn-primary{
@@ -528,12 +528,14 @@ function renderSetup() {
           <select id="mpp">${mppOpts}</select>
         </div>
         <button class="btn-primary" onclick="startTournament()">Start Tournament</button>
-        <div class="sc-divider">Scrimmage</div>
+        <div class="sc-divider"></div>
+        <h2>New Scrimmage</h2>
+        <p>Two teams in an epic battle.</p>
         <div class="fg">
           <label for="sc-rounds">Rounds</label>
           <select id="sc-rounds">${scOpts}</select>
         </div>
-        <button class="btn-outline" onclick="startScrimmage()">New Scrimmage</button>
+        <button class="btn-outline" onclick="startScrimmage()">Start Scrimmage</button>
       </div>
     </div>`;
 }

@@ -45,12 +45,22 @@ input{font-family:inherit}
 .setup p{color:var(--g500);margin-bottom:24px;font-size:.9rem}
 .fg{margin-bottom:20px}
 .fg label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
-.fg input[type=number]{
+.fg select{
   width:100%;padding:12px;border:2px solid var(--g200);
-  border-radius:var(--radius);font-size:1rem;outline:none;transition:border-color .15s
+  border-radius:var(--radius);font-size:1rem;outline:none;
+  background:#fff;appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;
+  padding-right:36px;cursor:pointer;transition:border-color .15s
 }
-.fg input[type=number]:focus{border-color:var(--blue)}
+.fg select:focus{border-color:var(--blue)}
 .hint{font-size:.8rem;color:var(--g400);margin-top:4px}
+.sc-divider{
+  display:flex;align-items:center;gap:10px;margin:24px 0 20px;
+  font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--g400)
+}
+.sc-divider::before,.sc-divider::after{content:'';flex:1;height:1px;background:var(--g200)}
 
 /* ── BUTTONS ── */
 .btn-primary{
@@ -69,6 +79,12 @@ input{font-family:inherit}
   background:#d97706;color:#fff
 }
 .btn-warning:active{background:#b45309}
+.btn-outline{
+  display:block;width:100%;padding:14px;border-radius:var(--radius);
+  font-size:1rem;font-weight:600;text-align:center;
+  background:none;border:2px solid var(--blue);color:var(--blue);transition:background .15s
+}
+.btn-outline:active{background:#eff6ff}
 .btn-danger{
   background:none;border:none;color:var(--red);
   font-size:.85rem;padding:8px;display:block;margin:0 auto
@@ -189,6 +205,14 @@ input{font-family:inherit}
 }
 .dec-zone:active{background:var(--g100)}
 .dec-lbl{font-size:1.6rem;font-weight:700;color:var(--red);line-height:1}
+.inc-mid{
+  flex-shrink:0;height:52px;
+  display:flex;align-items:center;justify-content:center;
+  background:#eff6ff;border-top:1px solid var(--g200);
+  cursor:pointer;user-select:none;-webkit-user-select:none;
+  font-size:1.1rem;font-weight:700;color:var(--blue);transition:background .1s
+}
+.inc-mid:active{background:var(--g200)}
 
 /* ── MODAL ── */
 .overlay{
@@ -486,6 +510,9 @@ function render() {
 // ── Setup ──
 
 function renderSetup() {
+  const tcOpts  = [3,4,5,6,7,8].map(n => `<option value="${n}"${n===4?' selected':''}>${n}</option>`).join('');
+  const mppOpts = [1,2,3,4].map(n => `<option value="${n}"${n===1?' selected':''}>${n}</option>`).join('');
+  const scOpts  = [1,2,3,4,5,6].map(n => `<option value="${n}"${n===3?' selected':''}>${n}</option>`).join('');
   $app.innerHTML = `
     <div class="hdr"><h1>Mini Tournament</h1></div>
     <div class="scroll-area">
@@ -494,15 +521,19 @@ function renderSetup() {
         <p>Pool play followed by single-elimination.</p>
         <div class="fg">
           <label for="tc">Number of Teams</label>
-          <input type="number" id="tc" min="3" max="8" value="6">
-          <div class="hint">3 – 8 teams</div>
+          <select id="tc">${tcOpts}</select>
         </div>
         <div class="fg">
           <label for="mpp">Times Each Team Plays Each Other</label>
-          <input type="number" id="mpp" min="1" max="4" value="1">
-          <div class="hint">Usually 1 or 2</div>
+          <select id="mpp">${mppOpts}</select>
         </div>
         <button class="btn-primary" onclick="startTournament()">Start Tournament</button>
+        <div class="sc-divider">Scrimmage</div>
+        <div class="fg">
+          <label for="sc-rounds">Rounds</label>
+          <select id="sc-rounds">${scOpts}</select>
+        </div>
+        <button class="btn-outline" onclick="startScrimmage()">New Scrimmage</button>
       </div>
     </div>`;
 }
@@ -510,8 +541,6 @@ function renderSetup() {
 function startTournament() {
   const tc  = parseInt(document.getElementById('tc').value);
   const mpp = parseInt(document.getElementById('mpp').value);
-  if (tc < 3 || tc > 8)    { alert('Please enter between 3 and 8 teams.'); return; }
-  if (mpp < 1 || mpp > 4)  { alert('Please enter between 1 and 4 matches per pairing.'); return; }
   const teams = Array.from({ length: tc }, (_, i) => ({ id: `t${i+1}`, name: `Team ${i+1}` }));
   state = {
     phase: 'pool', teams, matchesPerPairing: mpp,
@@ -522,12 +551,26 @@ function startTournament() {
   go('main');
 }
 
+function startScrimmage() {
+  const rounds = parseInt(document.getElementById('sc-rounds').value);
+  const teams = [{ id: 't1', name: 'Team 1' }, { id: 't2', name: 'Team 2' }];
+  state = {
+    phase: 'scrimmage', teams, matchesPerPairing: rounds,
+    poolGames: generateSchedule(teams, rounds),
+    bracketGames: [], activeGameId: null, activeGamePhase: null
+  };
+  save();
+  go('main');
+}
+
 // ── Main ──
 
 function renderMain() {
   const st = standings();
-  const allDone = state.phase === 'pool' && state.poolGames.length > 0 && state.poolGames.every(g => g.completed);
-  const phaseLabel = state.phase === 'pool' ? 'Pool Play' : 'Elimination';
+  const isPool = state.phase === 'pool';
+  const isScrimmage = state.phase === 'scrimmage';
+  const allDone = (isPool || isScrimmage) && state.poolGames.length > 0 && state.poolGames.every(g => g.completed);
+  const phaseLabel = isPool ? 'Pool Play' : isScrimmage ? 'Scrimmage' : 'Elimination';
 
   let html = `
     <div class="hdr">
@@ -541,7 +584,7 @@ function renderMain() {
       </div>
       <div class="games-sec">`;
 
-  if (state.phase === 'pool') {
+  if (isPool) {
     html += renderPoolGames();
     const someDone = state.poolGames.some(g => g.completed);
     if (allDone) {
@@ -553,6 +596,8 @@ function renderMain() {
         <button class="btn-warning" onclick="promptEarlyEnd()">End Pool Play Early…</button>
       </div>`;
     }
+  } else if (isScrimmage) {
+    html += renderPoolGames();
   } else {
     html += renderBracketView();
   }
@@ -672,14 +717,20 @@ function renderScoring() {
   if (!game) { closeGame(); return; }
 
   const isBracket = gph === 'bracket';
+  const isScrimmage = state.phase === 'scrimmage';
   const tied = game.homeScore === game.awayScore;
   const doneDisabled = isBracket && tied;
+  const h1Label = isBracket ? 'Elimination' : isScrimmage ? 'Scrimmage' : 'Pool Play';
   const phaseLabel = isBracket
-    ? (game.round === 'final' ? 'Final' : 'Semifinal') : 'Pool Play';
+    ? (game.round === 'final' ? 'Final' : 'Semifinal')
+    : isScrimmage ? 'Round' : 'Pool Play';
+  const midBtns = (side) => isScrimmage ? `
+    <div class="inc-mid" ontouchstart="" onclick="adj('${side}',3)">+3</div>
+    <div class="inc-mid" ontouchstart="" onclick="adj('${side}',5)">+5</div>` : '';
 
   $app.innerHTML = `
     <div class="hdr">
-      <h1>${isBracket ? 'Elimination' : 'Pool Play'}</h1>
+      <h1>${h1Label}</h1>
       <span class="phase-badge">${phaseLabel}</span>
     </div>
     <div class="scoring-outer">
@@ -696,6 +747,7 @@ function renderScoring() {
           <div class="inc-zone" ontouchstart="" onclick="adj('home',1)">
             <span class="inc-icon">+</span>
           </div>
+          ${midBtns('home')}
           <div class="dec-zone" ontouchstart="" onclick="adj('home',-1)">
             <span class="dec-lbl">−</span>
           </div>
@@ -706,6 +758,7 @@ function renderScoring() {
           <div class="inc-zone" ontouchstart="" onclick="adj('away',1)">
             <span class="inc-icon">+</span>
           </div>
+          ${midBtns('away')}
           <div class="dec-zone" ontouchstart="" onclick="adj('away',-1)">
             <span class="dec-lbl">−</span>
           </div>
@@ -899,7 +952,7 @@ function promptReset() {
 function doReset(type) {
   if (type === 'keep') {
     state = {
-      phase: 'pool', teams: state.teams,
+      phase: state.phase === 'scrimmage' ? 'scrimmage' : 'pool', teams: state.teams,
       matchesPerPairing: state.matchesPerPairing,
       poolGames: generateSchedule(state.teams, state.matchesPerPairing),
       bracketGames: [], activeGameId: null, activeGamePhase: null

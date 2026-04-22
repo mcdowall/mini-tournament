@@ -422,6 +422,7 @@ function makeBracket(seeded) {
   if (n >= 4) {
     games.push(bg('semi1', 'semi', seeded[0].id, seeded[3].id));
     games.push(bg('semi2', 'semi', seeded[1].id, seeded[2].id));
+    games.push(bg('consolation', 'consolation', null, null));
     games.push(bg('final', 'final', null, null));
   } else if (n === 3) {
     games.push(bg('semi1', 'semi', seeded[1].id, seeded[2].id));
@@ -441,31 +442,31 @@ function advanceBracket() {
   const n = Math.min(4, (state.teams || []).length);
   const semi1 = gs.find(g => g.id === 'semi1');
   const semi2 = gs.find(g => g.id === 'semi2');
+  const consolation = gs.find(g => g.id === 'consolation');
   const final = gs.find(g => g.id === 'final');
   if (!final) return;
 
+  const loserOf = g => g.homeScore > g.awayScore ? g.awayId : g.homeId;
+
+  function setSlot(game, slot, newId) {
+    if (!game || game[slot] === newId) return;
+    game[slot] = newId;
+    game.homeScore = 0; game.awayScore = 0;
+    game.completed = false; game.winnerId = null;
+  }
+
   if (n >= 4) {
     if (semi1?.completed && semi1.winnerId) {
-      if (final.homeId !== semi1.winnerId) {
-        final.homeId = semi1.winnerId;
-        final.homeScore = 0; final.awayScore = 0;
-        final.completed = false; final.winnerId = null;
-      }
+      setSlot(final,       'homeId', semi1.winnerId);
+      setSlot(consolation, 'homeId', loserOf(semi1));
     }
     if (semi2?.completed && semi2.winnerId) {
-      if (final.awayId !== semi2.winnerId) {
-        final.awayId = semi2.winnerId;
-        final.homeScore = 0; final.awayScore = 0;
-        final.completed = false; final.winnerId = null;
-      }
+      setSlot(final,       'awayId', semi2.winnerId);
+      setSlot(consolation, 'awayId', loserOf(semi2));
     }
   } else if (n === 3) {
     if (semi1?.completed && semi1.winnerId) {
-      if (final.awayId !== semi1.winnerId) {
-        final.awayId = semi1.winnerId;
-        final.homeScore = 0; final.awayScore = 0;
-        final.completed = false; final.winnerId = null;
-      }
+      setSlot(final, 'awayId', semi1.winnerId);
     }
   }
 }
@@ -668,12 +669,17 @@ function renderPoolGames() {
 function renderBracketView() {
   const gs = state.bracketGames || [];
   const semis = gs.filter(g => g.round === 'semi');
+  const consolation = gs.find(g => g.round === 'consolation');
   const final = gs.find(g => g.round === 'final');
   let html = '';
 
   if (semis.length) {
     html += `<div class="round-lbl">Semifinals</div>`;
     for (const g of semis) html += renderBracketGame(g);
+  }
+  if (consolation) {
+    html += `<div class="round-lbl">3rd Place</div>`;
+    html += renderBracketGame(consolation);
   }
   if (final) {
     html += `<div class="round-lbl">Final</div>`;
@@ -698,7 +704,7 @@ function renderBracketGame(g) {
     ? `onclick="openGame('${g.id}','bracket')"`
     : 'disabled';
   const winnerLine = g.winnerId
-    ? `<div class="gnum">🏆 ${esc(teamName(g.winnerId))}</div>` : '';
+    ? `<div class="gnum">${g.round === 'consolation' ? '🥉' : '🏆'} ${esc(teamName(g.winnerId))}</div>` : '';
 
   return `<div class="game-card${doneClass}${activeClass}${lockedClass}">
     <button class="game-btn" ${clickAttr}>
@@ -724,7 +730,7 @@ function renderScoring() {
   const doneDisabled = isBracket && tied;
   const h1Label = isBracket ? 'Elimination' : isScrimmage ? 'Scrimmage' : 'Pool Play';
   const phaseLabel = isBracket
-    ? (game.round === 'final' ? 'Final' : 'Semifinal')
+    ? (game.round === 'final' ? 'Final' : game.round === 'consolation' ? '3rd Place' : 'Semifinal')
     : isScrimmage ? 'Round' : 'Pool Play';
   const midBtns = (side) => isScrimmage ? `
     <div class="inc-mid" ontouchstart="" onclick="adj('${side}',3)">+3</div>

@@ -300,6 +300,7 @@ let state = loadState();
 let view = null;       // 'setup' | 'main' | 'scoring'
 let isSyncing = false; // true while a Gist push is in flight
 let _gistTimer = null; // debounce handle
+let _pubEtag   = null; // last ETag from public view polling
 
 function loadState() {
   try {
@@ -1182,24 +1183,65 @@ async function pushToGist(pat, gistId) {
 // ─────────────────────────────────────────────
 
 async function renderPublicView(gistId) {
-  $app.innerHTML = `
-    <div class="hdr"><h1>Mini Tournament</h1><span class="phase-badge">Live</span></div>
-    <div class="scroll-area" style="padding:32px;text-align:center;color:var(--g400)">
-      Loading standings…</div>`;
+  const isFirstLoad = _pubEtag === null;
 
+  // Show loading spinner only on the very first load
+  if (isFirstLoad) {
+    $app.innerHTML = `
+      <div class="hdr"><h1>Mini Tournament</h1><span class="phase-badge">Live</span></div>
+      <div class="scroll-area" style="padding:32px;text-align:center;color:var(--g400)">
+        Loading standings…</div>`;
+  }
+
+  // Build request — include ETag on subsequent polls
+  const headers = {};
+  if (_pubEtag) headers['If-None-Match'] = _pubEtag;
+
+  let res;
+  try {
+    res = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
+  } catch (_) {
+    // Network failure — keep existing content if we have it, retry in 30s
+    if (isFirstLoad) {
+      $app.innerHTML = `
+        <div class="hdr"><h1>Mini Tournament</h1></div>
+        <div class="scroll-area" style="padding:32px;color:var(--red);text-align:center">
+          Could not load standings.<br>Check the link and try again.</div>`;
+      return; // don't retry after a hard failure on first load
+    }
+    setTimeout(() => renderPublicView(gistId), 30000);
+    return;
+  }
+
+  // 304 Not Modified — nothing changed, just update the timestamp in-place
+  if (res.status === 304) {
+    const f = $app.querySelector('.pub-footer');
+    if (f) f.textContent = `Checked ${new Date().toLocaleTimeString()}`;
+    setTimeout(() => renderPublicView(gistId), 30000);
+    return;
+  }
+
+  if (!res.ok) {
+    if (isFirstLoad) {
+      $app.innerHTML = `
+        <div class="hdr"><h1>Mini Tournament</h1></div>
+        <div class="scroll-area" style="padding:32px;color:var(--red);text-align:center">
+          Could not load standings.<br>Check the link and try again.</div>`;
+    }
+    // On poll failure keep existing content; stop retrying on hard errors (404 etc.)
+    return;
+  }
+
+  // 200 — store ETag for next poll, parse and render
+  _pubEtag = res.headers.get('ETag') || _pubEtag;
   let fetchedState;
   try {
-    const res  = await fetch(`https://api.github.com/gists/${gistId}`);
-    if (!res.ok) throw new Error(`${res.status}`);
     const data = await res.json();
     const raw  = data.files['tournament.json']?.content;
     if (!raw) throw new Error('missing file');
     fetchedState = JSON.parse(raw);
   } catch (_) {
-    $app.innerHTML = `
-      <div class="hdr"><h1>Mini Tournament</h1></div>
-      <div class="scroll-area" style="padding:32px;color:var(--red);text-align:center">
-        Could not load standings.<br>Check the link and try again.</div>`;
+    setTimeout(() => renderPublicView(gistId), 30000);
     return;
   }
 
@@ -1219,9 +1261,8 @@ async function renderPublicView(gistId) {
   // Replace reset area with last-updated timestamp
   const resetArea = $app.querySelector('.reset-area');
   if (resetArea) resetArea.outerHTML =
-    `<div class="pub-footer">Updated ${new Date().toLocaleTimeString()}</div>`;
+    `<div class="pub-footer">Checked ${new Date().toLocaleTimeString()}</div>`;
 
-  // Poll every 30 seconds
   setTimeout(() => renderPublicView(gistId), 30000);
 }
 

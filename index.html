@@ -255,6 +255,33 @@ input{font-family:inherit}
 .seed-num.sf{background:var(--green)}
 .divider{height:1px;background:var(--g200);margin:12px 0}
 .hidden{display:none!important}
+
+/* ── SHARE ── */
+.share-btn{
+  background:none;border:none;color:#fff;font-size:1.2rem;
+  padding:6px;min-width:36px;min-height:36px;
+  display:flex;align-items:center;justify-content:center;
+  opacity:.85;transition:opacity .15s;gap:3px
+}
+.share-btn:active{opacity:1}
+.sync-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#fff;display:inline-block;flex-shrink:0
+}
+.sync-dot.busy{animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.share-url-box{
+  word-break:break-all;font-size:.8rem;background:var(--g100);
+  border-radius:8px;padding:10px 12px;margin-bottom:16px;
+  color:var(--g700);line-height:1.5
+}
+
+/* ── READ-ONLY PUBLIC VIEW ── */
+#app.readonly .name-btn{pointer-events:none;text-decoration:none;color:var(--g900);cursor:default}
+#app.readonly .game-btn{pointer-events:none;cursor:default}
+#app.readonly .cta-area,
+#app.readonly .reset-area{display:none}
+.pub-footer{text-align:center;font-size:.75rem;color:var(--g400);padding:16px 12px 24px}
 </style>
 </head>
 <body>
@@ -267,8 +294,12 @@ input{font-family:inherit}
 // ─────────────────────────────────────────────
 
 const STORAGE_KEY = 'mini_tournament_v1';
+const PAT_KEY     = 'mini_tournament_pat_v1';
+const GIST_KEY    = 'mini_tournament_gist_v1';
 let state = loadState();
-let view = null; // 'setup' | 'main' | 'scoring'
+let view = null;       // 'setup' | 'main' | 'scoring'
+let isSyncing = false; // true while a Gist push is in flight
+let _gistTimer = null; // debounce handle
 
 function loadState() {
   try {
@@ -280,6 +311,7 @@ function loadState() {
 
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+  pushToGistDebounced();
 }
 
 // ─────────────────────────────────────────────
@@ -575,10 +607,17 @@ function renderMain() {
   const allDone = (isPool || isScrimmage) && state.poolGames.length > 0 && state.poolGames.every(g => g.completed);
   const phaseLabel = isPool ? 'Pool Play' : isScrimmage ? 'Scrimmage' : 'Elimination';
 
+  const { gistId } = getShareState();
+  const syncDot = gistId
+    ? `<span class="sync-dot${isSyncing ? ' busy' : ''}"></span>` : '';
+
   let html = `
     <div class="hdr">
       <h1>Mini Tournament</h1>
-      <span class="phase-badge">${phaseLabel}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="phase-badge">${phaseLabel}</span>
+        <button class="share-btn" onclick="promptShare()" title="Share standings">⬆${syncDot}</button>
+      </div>
     </div>
     <div class="scroll-area">
       <div class="sec">
@@ -968,6 +1007,7 @@ function doReset(type) {
     save(); closeModal(); go('main');
   } else {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(GIST_KEY);
     closeModal();
     location.reload();
   }
@@ -984,10 +1024,214 @@ function esc(s) {
 }
 
 // ─────────────────────────────────────────────
+// SHARING (GitHub Gist)
+// ─────────────────────────────────────────────
+
+function getShareState() {
+  return {
+    pat:    localStorage.getItem(PAT_KEY)  || null,
+    gistId: localStorage.getItem(GIST_KEY) || null
+  };
+}
+
+function promptShare() {
+  const { pat, gistId } = getShareState();
+
+  if (!pat) {
+    // No PAT yet — show setup modal
+    showModal(`<div class="modal">
+      <h3>Set Up Sharing</h3>
+      <p>Sharing requires a free GitHub token (gist scope only — cannot access your code).</p>
+      <p style="margin-bottom:12px">
+        <a href="https://github.com/settings/tokens/new?scopes=gist&description=MiniTournament"
+           target="_blank" style="color:var(--blue)">Create token on GitHub ↗</a>
+      </p>
+      <input class="modal-input" id="pat-input" type="password"
+             placeholder="Paste token here" autocomplete="off">
+      <div id="pat-error" style="color:var(--red);font-size:.82rem;margin:-8px 0 12px;display:none"></div>
+      <div class="mactions">
+        <button class="mb-primary" onclick="savePat()">Save Token</button>
+        <button class="mb-cancel"  onclick="closeModal()">Cancel</button>
+      </div>
+    </div>`);
+    setTimeout(() => { const el = document.getElementById('pat-input'); if (el) el.focus(); }, 50);
+    return;
+  }
+
+  if (!gistId) {
+    // PAT set, not yet shared
+    showModal(`<div class="modal">
+      <h3>Share Standings?</h3>
+      <p>Creates a public, read-only live view of this tournament that anyone with the link can see.</p>
+      <div class="mactions">
+        <button class="mb-primary" onclick="confirmShare()">Share</button>
+        <button class="mb-cancel"  onclick="closeModal()">Cancel</button>
+      </div>
+    </div>`);
+    return;
+  }
+
+  // Already shared — show URL
+  showShareUrl();
+}
+
+function savePat() {
+  const val = (document.getElementById('pat-input')?.value || '').trim();
+  const errEl = document.getElementById('pat-error');
+  if (!val) {
+    if (errEl) { errEl.textContent = 'Please paste your token.'; errEl.style.display = 'block'; }
+    return;
+  }
+  localStorage.setItem(PAT_KEY, val);
+  closeModal();
+  renderMain();
+}
+
+async function confirmShare() {
+  const { pat } = getShareState();
+  if (!pat) return;
+
+  // Swap modal to a loading state
+  const actionsEl = document.querySelector('.mactions');
+  if (actionsEl) actionsEl.innerHTML = '<p style="text-align:center;color:var(--g400);font-size:.9rem">Creating share link…</p>';
+
+  try {
+    const res = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: { 'Authorization': `token ${pat}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: 'Mini Tournament standings',
+        public: true,
+        files: { 'tournament.json': { content: JSON.stringify(state) } }
+      })
+    });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const data = await res.json();
+    localStorage.setItem(GIST_KEY, data.id);
+    closeModal();
+    renderMain();
+    showShareUrl();
+  } catch (e) {
+    const actEl = document.querySelector('.mactions');
+    if (actEl) actEl.innerHTML = `
+      <p style="color:var(--red);font-size:.82rem;margin-bottom:8px">
+        Could not create share link — check your token.</p>
+      <button class="mb-cancel" onclick="closeModal()">Close</button>`;
+  }
+}
+
+function showShareUrl() {
+  const { gistId } = getShareState();
+  if (!gistId) return;
+  const url = `${location.origin}${location.pathname}?view=${gistId}`;
+  showModal(`<div class="modal">
+    <h3>Standings Shared ✓</h3>
+    <p>Anyone with this link can view the live standings:</p>
+    <div class="share-url-box" id="share-url-text">${esc(url)}</div>
+    <div class="mactions">
+      <button class="mb-primary" onclick="copyShareUrl('${esc(url)}')">Copy Link</button>
+      <button class="mb-cancel"  onclick="closeModal()">Close</button>
+      <button class="mb-danger"  onclick="stopSharing()">Stop Sharing</button>
+    </div>
+  </div>`);
+}
+
+function copyShareUrl(url) {
+  navigator.clipboard?.writeText(url).then(() => {
+    const btn = document.querySelector('#modal .mb-primary');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = 'Copy Link'; }, 2000); }
+  }).catch(() => {
+    // Fallback: select the text box
+    const box = document.getElementById('share-url-text');
+    if (box) { const range = document.createRange(); range.selectNode(box);
+      window.getSelection().removeAllRanges(); window.getSelection().addRange(range); }
+  });
+}
+
+function stopSharing() {
+  localStorage.removeItem(GIST_KEY);
+  closeModal();
+  renderMain();
+}
+
+function pushToGistDebounced() {
+  const { pat, gistId } = getShareState();
+  if (!pat || !gistId) return;
+  clearTimeout(_gistTimer);
+  _gistTimer = setTimeout(() => pushToGist(pat, gistId), 2000);
+}
+
+async function pushToGist(pat, gistId) {
+  isSyncing = true;
+  const dot = document.querySelector('.sync-dot');
+  if (dot) dot.classList.add('busy');
+  try {
+    await fetch(`https://api.github.com/gists/${gistId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `token ${pat}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { 'tournament.json': { content: JSON.stringify(state) } } })
+    });
+  } catch (_) { /* silently swallow network errors */ }
+  isSyncing = false;
+  const dot2 = document.querySelector('.sync-dot');
+  if (dot2) dot2.classList.remove('busy');
+}
+
+// ─────────────────────────────────────────────
+// PUBLIC VIEW
+// ─────────────────────────────────────────────
+
+async function renderPublicView(gistId) {
+  $app.innerHTML = `
+    <div class="hdr"><h1>Mini Tournament</h1><span class="phase-badge">Live</span></div>
+    <div class="scroll-area" style="padding:32px;text-align:center;color:var(--g400)">
+      Loading standings…</div>`;
+
+  let fetchedState;
+  try {
+    const res  = await fetch(`https://api.github.com/gists/${gistId}`);
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const raw  = data.files['tournament.json']?.content;
+    if (!raw) throw new Error('missing file');
+    fetchedState = JSON.parse(raw);
+  } catch (_) {
+    $app.innerHTML = `
+      <div class="hdr"><h1>Mini Tournament</h1></div>
+      <div class="scroll-area" style="padding:32px;color:var(--red);text-align:center">
+        Could not load standings.<br>Check the link and try again.</div>`;
+    return;
+  }
+
+  // Temporarily swap global state so existing render functions work
+  const savedState = state;
+  state = fetchedState;
+  renderMain();
+  state = savedState;
+
+  // Lock down all interactive elements
+  $app.classList.add('readonly');
+
+  // Replace header (renderMain wrote one with a share button we don't want)
+  const hdr = $app.querySelector('.hdr');
+  if (hdr) hdr.innerHTML = `<h1>Mini Tournament</h1><span class="phase-badge">Live</span>`;
+
+  // Replace reset area with last-updated timestamp
+  const resetArea = $app.querySelector('.reset-area');
+  if (resetArea) resetArea.outerHTML =
+    `<div class="pub-footer">Updated ${new Date().toLocaleTimeString()}</div>`;
+
+  // Poll every 30 seconds
+  setTimeout(() => renderPublicView(gistId), 30000);
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 
 (function init() {
+  const viewId = new URLSearchParams(location.search).get('view');
+  if (viewId) { renderPublicView(viewId); return; }
   if (state.phase === 'setup')    go('setup');
   else if (state.activeGameId)    go('scoring');
   else                            go('main');
